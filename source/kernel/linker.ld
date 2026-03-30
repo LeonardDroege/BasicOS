@@ -4,6 +4,8 @@ SECTIONS
 {
 	. = 2M;
 
+	kernel_start = .;
+
 	.text BLOCK(4K) : ALIGN(4K)
 	{
 		*(.multiboot)
@@ -25,4 +27,10 @@ SECTIONS
 		*(COMMON)
 		*(.bss)
 	}
+
+	kernel_end = .;
+
+	kernel_heap_start = .;
+	. = . + 4M;   /* 4 MB heap */
+	kernel_heap_end = .;
 }
