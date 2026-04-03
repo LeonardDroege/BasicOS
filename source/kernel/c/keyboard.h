@@ -2,6 +2,7 @@
 #define KEYBOARD_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 #define INPUT_BUFFER_SIZE 128
 char input_buffer[INPUT_BUFFER_SIZE];
@@ -144,7 +145,7 @@ static void ps2_wait_input(void)
 
 static void ps2_wait_output(void)
 {
-    while(!inb(0x64) & 0x01)
+    while(!(inb(0x64) & 0x01))
     {
 
     }
@@ -256,11 +257,11 @@ void keyboard_handler() {
     outb(0x20, 0x20);
 }
 
-void idt_set_gate(int, uint32_t);
+void idt_set_gate(int, uint64_t);
 
 void keyboard_init()
 {
-    idt_set_gate(33, (uint32_t)irq1_stub);
+    idt_set_gate(33, (uint64_t)irq1_stub);
 }
 
 #endif

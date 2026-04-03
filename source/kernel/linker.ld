@@ -1,4 +1,4 @@
-ENTRY(_start)
+ENTRY(start)
 
 SECTIONS
 {
@@ -6,23 +6,27 @@ SECTIONS
 
 	kernel_start = .;
 
-	.text BLOCK(4K) : ALIGN(4K)
+	.boot :
 	{
-		*(.multiboot)
+		KEEP(*(.multiboot))
+	}
+
+	.text :
+	{
 		*(.text)
 	}
 
-	.rodata BLOCK(4K) : ALIGN(4K)
+	.rodata :
 	{
 		*(.rodata)
 	}
 
-	.data BLOCK(4K) : ALIGN(4K)
+	.data :
 	{
 		*(.data)
 	}
 
-	.bss BLOCK(4K) : ALIGN(4K)
+	.bss :
 	{
 		*(COMMON)
 		*(.bss)

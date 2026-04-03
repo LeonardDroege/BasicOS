@@ -1,10 +1,14 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include "multiboot.h"
 
 #define PAGE_SIZE 4096
+
+extern uint64_t mb_info_ptr;
 
 typedef struct
 {
@@ -79,35 +83,55 @@ static const char* to_dec(uint64_t value) {
     return &buf[i + 1];
 }
 
-void parse_memory_map(multiboot_info_t* mb_info)
+void parse_memory_map(void)
 {
-	multiboot_memory_map_t* entry = (multiboot_memory_map_t*)mb_info->mmap_addr;
-	uint32_t mmap_end = mb_info->mmap_addr + mb_info->mmap_length;
+	uint8_t* base = (uint8_t*)(uintptr_t)mb_info_ptr;
 
-	while((uint32_t)entry < mmap_end)
-	{
-		if(entry->type == 1)
-		{
-			uint64_t base = entry->addr;
-			uint64_t len = entry->len;
+    uint32_t total_size = *(uint32_t*)base;
+    uint8_t* ptr = base + 8;
+    uint8_t* end = base + total_size;
 
-			if(base < 0x100000000ULL)
-			{
-				uint64_t end = base + len;
+    while(ptr < end)
+    {
+        struct multiboot_tag* tag = (void*)ptr;
 
-				if(end > 0x100000000ULL)
-				{
-					end = 0x100000000ULL;
-				}
+        if(tag->type == MULTIBOOT_TAG_TYPE_END)
+        {
+            break;
+        }
 
-				usable_memory[usable_count].base = base;
-				usable_memory[usable_count].length = len;
-				usable_count++;
-			}
-		}
+        if(tag->type == MULTIBOOT_TAG_TYPE_MMAP)
+        {
+            struct multiboot_tag_mmap* mmap_tag = (void*)tag;
 
-		entry = (multiboot_memory_map_t*)((uint32_t)entry + entry->size + sizeof(entry->size));
-	}
+            struct multiboot_mmap_entry* entry = mmap_tag->entries;
+            struct multiboot_mmap_entry* entry_end = (struct multiboot_mmap_entry*)((uint8_t*)tag + tag->size);
+
+            for(; entry < entry_end; entry = (struct multiboot_mmap_entry*)((uint8_t*)entry + mmap_tag->entry_size))
+            {
+                if(entry->type == MULTIBOOT_MEMORY_AVAILABLE)
+                {
+                    uint64_t base_addr = entry->addr;
+                    uint64_t len = entry->len;
+
+                    if(base_addr < 0x100000000ULL)
+                    {
+                        uint64_t end_addr = base_addr + len;
+                        if(end_addr > 0x100000000ULL)
+                        {
+                            end_addr = 0x100000000ULL;
+                        }
+
+                        usable_memory[usable_count].base = base_addr;
+                        usable_memory[usable_count].length = end_addr - base_addr;
+                        usable_count++;
+                    }
+                }
+            }
+        }
+
+        ptr += (tag->size + MULTIBOOT_TAG_ALIGN - 1) & ~(MULTIBOOT_TAG_ALIGN - 1);
+    }
 }
 
 static inline void pmm_set_bit(uint32_t page) {

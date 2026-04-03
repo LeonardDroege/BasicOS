@@ -1,11 +1,11 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "multiboot.h"
 #include "memory.h"
-#include "keyboard.h"
-#include "pic.h"
 #include "idt.h"
-#include "gdt.h"
+#include "pic.h"
+#include "keyboard.h"
 
 enum vga_color {
 	VGA_COLOR_BLACK = 0,
@@ -25,6 +25,8 @@ enum vga_color {
 	VGA_COLOR_LIGHT_BROWN = 14,
 	VGA_COLOR_WHITE = 15,
 };
+
+void terminal_writestring(const char* data, char should_print_start_char);
 
 static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) 
 {
@@ -52,6 +54,8 @@ size_t terminal_row;
 size_t terminal_column;
 uint8_t terminal_color;
 uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
+
+extern uint32_t mb_magic;
 
 void terminal_initialize(void) 
 {
@@ -158,18 +162,20 @@ void print_memory_map()
 	for(size_t i = 0; i < usable_count; i++)
 	{
 		terminal_writestring("[Usable] ", 0);
-		terminal_writestring(to_hex32((uint32_t)usable_memory[i].base), 0);
+		terminal_writestring(to_hex64(usable_memory[i].base), 0);
 		terminal_writestring(" - ", 0);
-		terminal_writestring(to_hex32((uint32_t)(usable_memory[i].length + usable_memory[i].base)), 0);
+		terminal_writestring(to_hex64(usable_memory[i].length + usable_memory[i].base), 0);
 		terminal_writestring(" ", 0);
 
-		uint32_t size = usable_memory[i].length / 1024;
+		uint64_t size = usable_memory[i].length / 1024;
 		char isMb = size > 1024 ? 1 : 0;
 		size = isMb == 1 ? size / 1024 : size;
 		terminal_writestring("(", 0);
 		terminal_writestring(to_dec(size), 0);
 		terminal_writestring(isMb == 1 ?"MB)\n" : "KB)\n", 0);
 	}
+
+    terminal_writestring("\n", 0);
 }
 
 void kheap_dump(void) {
@@ -199,7 +205,7 @@ void kheap_dump(void) {
         curr = curr->next;
     }
 
-    terminal_writestring("========================\n", 0);
+    terminal_writestring("========================\n\n", 0);
 }
 
 void isr0_handler()
@@ -208,29 +214,28 @@ void isr0_handler()
     for(;;);
 }
 
-void kernel_main(uint32_t magic, multiboot_info_t* mb_info) 
+void kernel_main()
 {
-	terminal_initialize();
+    terminal_initialize();
 	terminal_writestring("BasicOS\n\n", 0);
 
-	if(magic != MULTIBOOT_BOOTLOADER_MAGIC)
-	{
-		terminal_writestring("Bad multiboot magic!\n\n", 0);
+    if(mb_magic != MULTIBOOT2_BOOTLOADER_MAGIC)
+    {
+        terminal_writestring("Bad multiboot2 magic!\n\n", 0);
+        terminal_writestring(to_hex32(mb_magic), 0);
 		return;
 	}
-	terminal_writestring("Initialized multiboot!\n\n", 0);
+	terminal_writestring("Initialized multiboot2!\n\n", 0);
 
-	parse_memory_map(mb_info);
-	print_memory_map();
+    parse_memory_map();
+    print_memory_map();
 
-	pmm_init();
-	kheap_init();
+    pmm_init();
+    kheap_init();
 
-	terminal_writestring("Initialized pmm and heap!\n\n", 0);
+    terminal_writestring("Initialized pmm and heap!\n\n", 0);
 
-	gdt_init();
 	idt_init();
-	idt_install_exceptions();
 	pic_remap();
 
 	uint8_t mask = inb(0x21);
@@ -243,12 +248,12 @@ void kernel_main(uint32_t magic, multiboot_info_t* mb_info)
 	__asm__ volatile ("sti");
 
 	terminal_writestring("GDT base: ", 0);
-	terminal_writestring(to_hex32(gdt_ptr.base), 0);
+	terminal_writestring(to_hex64(gdt_ptr.base), 0);
 	terminal_writestring(" limit: ", 0);
 	terminal_writestring(to_hex32(gdt_ptr.limit), 0);
 
 	terminal_writestring("\nIDT base: ", 0);
-	terminal_writestring(to_hex32(idt_ptr.base), 0);
+	terminal_writestring(to_hex64(idt_ptr.base), 0);
 	terminal_writestring(" limit: ", 0);
 	terminal_writestring(to_hex32(idt_ptr.limit), 0);
 	terminal_writestring("\n\n", 0);

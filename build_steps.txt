@@ -1,12 +1,10 @@
-i686-elf-as boot.asm -o boot.o
-i686-elf-as interrupts.asm -o interrupts.o
-i686-elf-gcc -c kernel.c -o kernel.o -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-i686-elf-gcc -T linker.ld -o basicos.os -ffreestanding -O2 -nostdlib boot.o kernel.o interrupts.o -lgcc
+nasm -f elf64 source/kernel/asm/header.asm -o source/kernel/build/header.o
+nasm -f elf64 source/kernel/asm/main.asm -o source/kernel/build/main.o
+nasm -f elf64 source/kernel/asm/main64.asm -o source/kernel/build/main64.o
+nasm -f elf64 source/kernel/asm/interrupts.asm -o source/kernel/build/interrupts.o
+x86_64-elf-gcc -c -I src/intf -ffreestanding source/kernel/c/main.c -o source/kernel/build/main_c.o
+x86_64-elf-ld -n -o source/kernel/build/kernel.bin -T source/kernel/linker.ld source/kernel/build/header.o source/kernel/build/main.o source/kernel/build/main64.o source/kernel/build/main_c.o source/kernel/build/interrupts.o
 
-cp basicos.os iso/boot/basicos.os
-
-SWITCH TO WSL FOR GRUB
-
-grub-mkrescue -o basicos.iso iso
-
-qemu-system-i386 -cdrom basicos.iso
+cp source/kernel/build/kernel.bin source/kernel/iso/boot/kernel.bin
+grub-mkrescue -o source/kernel/iso/kernel.iso source/kernel/iso
+qemu-system-x86_64 -cdrom source/kernel/iso/kernel.iso
