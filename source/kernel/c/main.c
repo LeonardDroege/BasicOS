@@ -1,161 +1,12 @@
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
-#include "multiboot.h"
 #include "memory.h"
 #include "idt.h"
 #include "pic.h"
 #include "keyboard.h"
-
-enum vga_color {
-	VGA_COLOR_BLACK = 0,
-	VGA_COLOR_BLUE = 1,
-	VGA_COLOR_GREEN = 2,
-	VGA_COLOR_CYAN = 3,
-	VGA_COLOR_RED = 4,
-	VGA_COLOR_MAGENTA = 5,
-	VGA_COLOR_BROWN = 6,
-	VGA_COLOR_LIGHT_GREY = 7,
-	VGA_COLOR_DARK_GREY = 8,
-	VGA_COLOR_LIGHT_BLUE = 9,
-	VGA_COLOR_LIGHT_GREEN = 10,
-	VGA_COLOR_LIGHT_CYAN = 11,
-	VGA_COLOR_LIGHT_RED = 12,
-	VGA_COLOR_LIGHT_MAGENTA = 13,
-	VGA_COLOR_LIGHT_BROWN = 14,
-	VGA_COLOR_WHITE = 15,
-};
-
-void terminal_writestring(const char* data, char should_print_start_char);
-
-static inline uint8_t vga_entry_color(enum vga_color fg, enum vga_color bg) 
-{
-	return fg | bg << 4;
-}
-
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) 
-{
-	return (uint16_t) uc | (uint16_t) color << 8;
-}
-
-size_t strlen(const char* str) 
-{
-	size_t len = 0;
-	while (str[len])
-		len++;
-	return len;
-}
-
-#define VGA_WIDTH   80
-#define VGA_HEIGHT  25
-#define VGA_MEMORY  0xB8000 
-
-size_t terminal_row;
-size_t terminal_column;
-uint8_t terminal_color;
-uint16_t* terminal_buffer = (uint16_t*)VGA_MEMORY;
+#include "terminal.h"
 
 extern uint32_t mb_magic;
-
-void terminal_initialize(void) 
-{
-	terminal_row = 0;
-	terminal_column = 0;
-	terminal_color = vga_entry_color(VGA_COLOR_WHITE, VGA_COLOR_BLUE);
-	
-	for (size_t y = 0; y < VGA_HEIGHT; y++) {
-		for (size_t x = 0; x < VGA_WIDTH; x++) {
-			const size_t index = y * VGA_WIDTH + x;
-			terminal_buffer[index] = vga_entry(' ', terminal_color);
-		}
-	}
-}
-
-void terminal_setcolor(uint8_t color) 
-{
-	terminal_color = color;
-}
-
-void terminal_scroll_up(void) {
-    // Move rows 1 through VGA_HEIGHT-1 up by one row
-    // Copy from row 1 to row 0, row 2 to row 1, etc.
-    for (size_t row = 1; row < VGA_HEIGHT; row++) {
-        for (size_t col = 0; col < VGA_WIDTH; col++) {
-            size_t src_index = row * VGA_WIDTH + col;
-            size_t dest_index = (row - 1) * VGA_WIDTH + col;
-            terminal_buffer[dest_index] = terminal_buffer[src_index];
-        }
-    }
-    
-    // Clear the last row
-    for (size_t col = 0; col < VGA_WIDTH; col++) {
-        size_t last_row_index = (VGA_HEIGHT - 1) * VGA_WIDTH + col;
-        terminal_buffer[last_row_index] = vga_entry(' ', terminal_color);
-    }
-}
-
-void terminal_putentryat(char c, uint8_t color, size_t x, size_t y) 
-{
-	const size_t index = y * VGA_WIDTH + x;
-	terminal_buffer[index] = vga_entry(c, color);
-}
-
-void terminal_putchar(char c, char should_print_start_char) 
-{
-	if(c == '\n')
-	{
-		terminal_row++;
-        terminal_column = 0;
-
-        if (terminal_row == VGA_HEIGHT)
-		{   
-            terminal_scroll_up();
-            terminal_row = VGA_HEIGHT - 1;
-        }
-		if(should_print_start_char == 1) terminal_writestring("> ", 0);
-		return;
-	}
-
-	if(c == '\r')
-	{
-		terminal_column = 0;
-		if(should_print_start_char == 1) terminal_writestring("> ", 0);
-		return;
-	}
-
-	terminal_putentryat(c, terminal_color, terminal_column, terminal_row);
-	if (++terminal_column == VGA_WIDTH) {
-		terminal_column = 0;
-		if (++terminal_row == VGA_HEIGHT)
-		{
-            terminal_scroll_up();
-            terminal_row = VGA_HEIGHT - 1;
-        }
-	}
-}
-
-void terminal_write(const char* data, size_t size, char should_print_start_char) 
-{
-	for (size_t i = 0; i < size; i++)
-	{
-        terminal_putchar(data[i], should_print_start_char);
-    }
-}
-
-void terminal_writestring(const char* data, char should_print_start_char) 
-{
-	terminal_write(data, strlen(data), should_print_start_char);
-}
-
-void terminal_backspace()
-{
-	if(terminal_column > 0)
-	{
-		terminal_column--;
-		size_t index = terminal_row * VGA_WIDTH + terminal_column;
-		terminal_buffer[index] = vga_entry(' ', terminal_color);
-	}
-}
 
 void print_memory_map()
 {
@@ -179,6 +30,7 @@ void print_memory_map()
 }
 
 void kheap_dump(void) {
+	terminal_writestring("\n", 0);
     terminal_writestring("=== Kernel Heap Dump ===\n", 0);
 
     kheap_block_t* curr = kheap_head;
@@ -206,17 +58,53 @@ void kheap_dump(void) {
     }
 
     terminal_writestring("========================\n\n", 0);
+	terminal_writestring("", 1);
 }
 
 void isr0_handler()
 {
-    terminal_writestring("Divide by zero!\n", 1);
+    terminal_writestring("Divide by zero!\n", 0);
     for(;;);
 }
+
+#define COM1_PORT 0x3F8
+
+void setup_com_port(void)
+{
+	outb(COM1_PORT + 1, 0x00);
+	outb(COM1_PORT + 3, 0x80);
+	outb(COM1_PORT + 0, 0x03);
+	outb(COM1_PORT + 1, 0x00);
+	outb(COM1_PORT + 3, 0x03);
+	outb(COM1_PORT + 2, 0xC7);
+	outb(COM1_PORT + 4, 0x0B);
+	outb(COM1_PORT + 4, 0x1E);
+	outb(COM1_PORT + 0, 0xAE);
+
+	if(inb(COM1_PORT + 0) != 0xAE)
+	{
+		return;
+	}
+
+	outb(COM1_PORT + 4, 0x0F);
+}
+
+int is_transmit_empty() {
+   return inb(COM1_PORT + 5) & 0x20;
+}
+
+void write_to_com_port(char c)
+{
+	while(is_transmit_empty() == 0);
+	outb(COM1_PORT, c);
+}
+
+extern uint64_t framebuffer_addr;
 
 void kernel_main()
 {
     terminal_initialize();
+	
 	terminal_writestring("BasicOS\n\n", 0);
 
     if(mb_magic != MULTIBOOT2_BOOTLOADER_MAGIC)
@@ -226,6 +114,8 @@ void kernel_main()
 		return;
 	}
 	terminal_writestring("Initialized multiboot2!\n\n", 0);
+
+	setup_com_port();
 
     parse_memory_map();
     print_memory_map();
@@ -258,7 +148,7 @@ void kernel_main()
 	terminal_writestring(to_hex32(idt_ptr.limit), 0);
 	terminal_writestring("\n\n", 0);
 
-	terminal_writestring("> ", 0);
+	terminal_writestring("", 1);
 
 	for(;;)
 	{

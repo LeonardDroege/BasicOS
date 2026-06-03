@@ -5,10 +5,24 @@ section .data
 global mb_magic
 global mb_info_ptr
 global gdt_ptr
+
+global framebuffer_addr
+global page_table_l2
+
+global framebuffer_pitch
+global framebuffer_width
+global framebuffer_height
+global framebuffer_bpp
+
 gdt_ptr equ gdt64.pointer
 
 mb_magic: dd 0
 mb_info_ptr: dq 0
+framebuffer_addr: dq 0
+framebuffer_pitch: dd 0
+framebuffer_width: dd 0
+framebuffer_height: dd 0
+framebuffer_bpp: db 0
 
 section .text
 bits 32
@@ -24,6 +38,7 @@ start:
 	call check_long_mode
 
 	call setup_page_tables
+	call setup_framebuffer_page_tables
 	call enable_paging
 
 	lgdt [gdt64.pointer]
@@ -84,7 +99,6 @@ setup_page_tables:
 
 	mov ecx, 0 ; counter
 .loop:
-
 	mov eax, 0x200000 ; 2MiB
 	mul ecx
 	or eax, 0b10000011 ; present, writable, huge page
@@ -94,6 +108,41 @@ setup_page_tables:
 	cmp ecx, 512 ; checks if the whole table is mapped
 	jne .loop ; if not, continue
 
+	ret
+
+setup_framebuffer_page_tables:
+    mov eax, [mb_info_ptr]
+	add eax, 8
+.find_framebuffer_tag:
+	mov ebx, [eax]
+	cmp ebx, 0
+	je .done
+
+	cmp ebx, 8
+	je .found_framebuffer_tag
+
+	mov ecx, [eax + 4]
+	add eax, ecx
+	add eax, 7
+	and eax, 0xFFFFFFF8
+	jmp .find_framebuffer_tag
+.found_framebuffer_tag:
+    mov edx, [eax+8] ; edx = framebuffer physical address (+12 = high 32 bits, +8 = low 32 bits)
+	mov [framebuffer_addr], edx
+	mov edx, [eax+12]
+	mov [framebuffer_addr+4], edx
+
+	mov edx, [eax+16]
+	mov [framebuffer_pitch], edx
+	mov edx, [eax+20]
+	mov [framebuffer_width], edx
+	mov edx, [eax+24]
+	mov [framebuffer_height], edx
+	mov dl, [eax+28]
+	mov [framebuffer_bpp], dl
+
+	jmp .done
+.done:
 	ret
 
 enable_paging:

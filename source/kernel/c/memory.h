@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "terminal.h"
 #include "multiboot.h"
 
 #define PAGE_SIZE 4096
@@ -83,6 +84,8 @@ static const char* to_dec(uint64_t value) {
     return &buf[i + 1];
 }
 
+void write_to_com_port(char c);
+
 void parse_memory_map(void)
 {
 	uint8_t* base = (uint8_t*)(uintptr_t)mb_info_ptr;
@@ -93,16 +96,30 @@ void parse_memory_map(void)
 
     while(ptr < end)
     {
-        struct multiboot_tag* tag = (void*)ptr;
+        struct multiboot_tag* tag = (struct multiboot_tag*)ptr;
 
         if(tag->type == MULTIBOOT_TAG_TYPE_END)
         {
             break;
         }
 
+		if(tag->type == MULTIBOOT_TAG_TYPE_FRAMEBUFFER)
+		{
+			write_to_com_port('F');
+			write_to_com_port('B');
+			write_to_com_port('M');
+			write_to_com_port('A');
+			write_to_com_port(':');
+			write_to_com_port(' ');
+			for (int i = 60; i >= 0; i -= 4) {
+				unsigned digit = (framebuffer_mapped_addr >> i) & 0xF;
+				write_to_com_port("0123456789ABCDEF"[digit]);
+			}
+		}
+
         if(tag->type == MULTIBOOT_TAG_TYPE_MMAP)
         {
-            struct multiboot_tag_mmap* mmap_tag = (void*)tag;
+            struct multiboot_tag_mmap* mmap_tag = (struct multiboot_tag_mmap*)tag;
 
             struct multiboot_mmap_entry* entry = mmap_tag->entries;
             struct multiboot_mmap_entry* entry_end = (struct multiboot_mmap_entry*)((uint8_t*)tag + tag->size);

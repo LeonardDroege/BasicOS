@@ -2,3 +2,6 @@
 *.o
 *.os
 *.bin
+.vscode/
+build/
+*.log

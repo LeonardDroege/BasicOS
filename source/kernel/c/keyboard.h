@@ -1,6 +1,7 @@
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
 
+#include "terminal.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -16,6 +17,7 @@ extern void irq1_stub();
 void terminal_backspace();
 void terminal_putchar(char c, char should_print_start_char);
 void terminal_writestring(const char* data, char should_print_start_char);
+void kheap_dump(void);
 
 static inline uint8_t inb(uint16_t p) {
     uint8_t r;
@@ -172,7 +174,7 @@ void handle_command(char buffer[])
 {
     size_t index = 0;
     char command[64];
-    while(buffer[index] != ' ' && buffer[index] != '\0')
+    while(buffer[index] != '\0')
     {
         command[index] = to_lower(buffer[index]);
         index++;
@@ -185,17 +187,38 @@ void handle_command(char buffer[])
 
     if(str_equals(command, "help"))
     {
-        terminal_writestring("\nAvailable commands:\n", 1);
-        terminal_writestring("==============================\n", 1);
-        terminal_writestring("help\n", 1);
-        terminal_writestring("==============================\n\n", 1);
+        terminal_writestring("\nAvailable commands:\n", 0);
+        terminal_writestring("==============================\n", 0);
+        terminal_writestring("clear         Clears the terminal\n", 0);
+        terminal_writestring("help          Lists all available commands\n", 0);
+        terminal_writestring("hdump         Lists all free and used heap memory address ranges\n", 0);
+        terminal_writestring("==============================\n\n", 0);
+        terminal_writestring("",1);
+        command[0] = '\0';
         return;
     }
 
-    terminal_writestring("\nUnknown command: \"", 1);
-    terminal_writestring(command, 1);
-    terminal_writestring("\"\n", 1);
-    terminal_writestring("use \"help\" to list available commands\n\n", 1);
+    if(str_equals(command, "hdump"))
+    {
+        kheap_dump();
+        command[0] = '\0';
+        return;
+    }
+
+    if(str_equals(command, "clear"))
+    {
+        terminal_initialize();
+        terminal_writestring("", 1);
+        command[0] = '\0';
+        return;
+    }
+
+    terminal_writestring("\nUnknown command: \"", 0);
+    terminal_writestring(command, 0);
+    terminal_writestring("\"\n", 0);
+    terminal_writestring("use \"help\" to list available commands\n\n", 0);
+    terminal_writestring("", 1);
+    command[0] = '\0';
 }
 
 void keyboard_handler() {
