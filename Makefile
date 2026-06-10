@@ -25,10 +25,10 @@ all:
 	nasm -f elf64 source/kernel/asm/interrupts.asm -o source/kernel/build/interrupts.o
 	
 	@echo "Compiling main.c..."
-	x86_64-elf-gcc -c -I source/kernel/intf -ffreestanding source/kernel/c/main.c -o source/kernel/build/main_c.o
+	x86_64-linux-gnu-gcc -c -I source/kernel/intf -ffreestanding source/kernel/c/main.c -o source/kernel/build/main_c.o
 	
 	@echo "Linking kernel..."
-	x86_64-elf-ld -n -o source/kernel/build/kernel.bin -T source/kernel/linker.ld source/kernel/build/header.o source/kernel/build/main.o source/kernel/build/main64.o source/kernel/build/main_c.o source/kernel/build/interrupts.o
+	x86_64-linux-gnu-ld -n -o source/kernel/build/kernel.bin -T source/kernel/linker.ld source/kernel/build/header.o source/kernel/build/main.o source/kernel/build/main64.o source/kernel/build/main_c.o source/kernel/build/interrupts.o
 	
 	@echo "Copying kernel to ISO directory..."
 	cp source/kernel/build/kernel.bin source/kernel/iso/boot/kernel.bin

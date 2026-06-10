@@ -13,8 +13,8 @@ header_start:
 	dw 5
 	dw 0
 	dd 20
-	dd 2560
-	dd 1440
+	dd 0
+	dd 0
 	dd 32
 	dd 0
 
